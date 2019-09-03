@@ -1,0 +1,2 @@
+ARG M2_MARIADB_VERSION=""
+FROM mariadb:${M2_MARIADB_VERSION:-latest}

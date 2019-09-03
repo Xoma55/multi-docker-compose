@@ -1,0 +1,136 @@
+version: "3.4"
+
+#### TEMPLATE ####
+
+x-common-network:
+  &http-network
+    - backend
+    - frontend
+
+services:
+
+#### AUTH ####
+
+  auth-php-server:
+    build:
+      context: ./
+      dockerfile: ./Auth/php/Dockerfile
+      args:
+        PHP_VERSION: ${AUTH_PHP_VERSION}
+    networks:
+      - backend
+    volumes:
+      - ../project/auth:/usr/share/nginx/html
+    container_name: "${AUTH_PHP_NAME}"
+
+  auth-http-server:
+    build:
+      context: ./
+      dockerfile: ./Auth/nginx/Dockerfile
+      args:
+        AUTH_NGINX_VERSION: ${AUTH_NGINX_VERSION}
+    depends_on:
+      - auth-php-server
+      - auth-db
+    networks: *http-network
+    ports:
+      - "8082:80"
+    volumes:
+      - ../project/auth:/usr/share/nginx/html
+    container_name: "${AUTH_NGINX_NAME}"
+
+  auth-db:
+    build:
+      context: ./
+      dockerfile: ./Auth/mariadb/Dockerfile
+      args:
+        AUTH_MARIADB_VERSION: ${AUTH_MARIADB_VERSION}
+    restart: always
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./Auth/mariadb/data:/var/lib/mysql
+    networks:
+      - backend
+    environment:
+      MYSQL_ROOT_PASSWORD: "${AUTH_DB_ROOT_PASSWORD}"
+      MYSQL_DATABASE: "${AUTH_DB_NAME}"
+      MYSQL_USER: "${AUTH_DB_USERNAME}"
+      MYSQL_PASSWORD: "${AUTH_DB_PASSWORD}"
+    container_name: "${AUTH_MARIADB_NAME}"
+
+
+#### M2 ####
+
+  m2-php-server:
+    build:
+      context: ./
+      dockerfile: ./M2/php/Dockerfile
+      args:
+        PHP_VERSION: ${M2_PHP_VERSION}
+    networks:
+      - backend
+    volumes:
+      - ../project/m2:/usr/share/nginx/html
+    container_name: "${M2_PHP_NAME}"
+
+  m2-http-server:
+    build:
+      context: ./
+      dockerfile: ./M2/nginx/Dockerfile
+      args:
+        M2_NGINX_VERSION: ${M2_NGINX_VERSION}
+    depends_on:
+      - auth-php-server
+      - auth-db
+    networks: *http-network
+    ports:
+      - "8087:80"
+    volumes:
+      - ../project/m2:/usr/share/nginx/html
+    container_name: "${M2_NGINX_NAME}"
+
+  m2-db:
+    build:
+      context: ./
+      dockerfile: ./M2/mariadb/Dockerfile
+      args:
+        M2_MARIADB_VERSION: ${M2_MARIADB_VERSION}
+    restart: always
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./M2/mariadb/data:/var/lib/mysql
+    networks:
+      - backend
+    environment:
+      MYSQL_ROOT_PASSWORD: "${M2_DB_ROOT_PASSWORD}"
+      MYSQL_DATABASE: "${M2_DB_NAME}"
+      MYSQL_USER: "${M2_DB_USERNAME}"
+      MYSQL_PASSWORD: "${M2_DB_PASSWORD}"
+    container_name: "${M2_MARIADB_NAME}"
+
+
+  base-phpmyadmin:
+    build:
+      context: './Base/phpmyadmin'
+    links:
+      - auth-db:mysql
+    depends_on:
+      - auth-db
+      - m2-db
+    networks:
+      - backend
+      - frontend
+    ports:
+      - "8090:80"
+    environment:
+      MYSQL_ROOT_PASSWORD: "${AUTH_DB_ROOT_PASSWORD}"
+      MYSQL_USER: "${AUTH_DB_USERNAME}"
+      PMA_HOST: "${AUTH_MARIADB_NAME}"
+      PMA_PORT: 3306
+    container_name: base-phpmyadmin
+
+networks:
+  backend:
+  frontend:
